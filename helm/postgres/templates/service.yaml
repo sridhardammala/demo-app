@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  # This is the DNS name the FastAPI backend uses to connect to PostgreSQL.
+  # Kubernetes CoreDNS resolves "postgres-service" to the pod IP automatically.
+  # Like a private Route 53 record pointing to an RDS endpoint.
+  name: postgres-service
+  namespace: demo-app
+spec:
+  # ClusterIP = internal only — database never exposed to the internet
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - protocol: TCP
+      port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.port }}

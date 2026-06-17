@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: demo-app
+spec:
+  # Each pod gets a stable name: postgres-0, postgres-1 etc.
+  # Unlike Deployments where pods get random names like backend-abc123
+  serviceName: postgres-service
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: postgres
+
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          ports:
+            - containerPort: {{ .Values.service.port }}
+
+          # Inject all credentials from the Secret as environment variables.
+          # The pod never sees the raw values in the manifest — reads from Secret.
+          # Like injecting SSM Parameter Store values into an ECS task.
+          envFrom:
+            - secretRef:
+                name: postgres-secret
+
+          # Mount the persistent disk at the PostgreSQL data directory.
+          # All database files written here survive pod restarts.
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+              # subPath avoids a known PostgreSQL permission issue with mounted volumes
+              subPath: pgdata
+
+          # pg_isready checks if PostgreSQL is accepting connections
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.auth.username }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.resources.limits.cpu }}
+              memory: {{ .Values.resources.limits.memory }}
+
+      # Attach the PersistentVolumeClaim to this pod
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc

@@ -1,0 +1,34 @@
+# --- PostgreSQL credentials ---
+# These become a Kubernetes Secret — never hardcoded in templates.
+# Think of it like AWS Secrets Manager values injected into a Lambda.
+auth:
+  database: demoapp
+  username: demoapp
+  password: "demoapp123"
+
+# --- Storage ---
+storage:
+  # Size of the GCP persistent disk
+  size: 1Gi
+  # GKE storage class — provisions a GCP standard persistent disk
+  # Like choosing gp2 or gp3 for an EBS volume in AWS
+  storageClassName: standard-rwo
+
+# --- Image ---
+image:
+  repository: postgres
+  tag: "15-alpine"
+  pullPolicy: IfNotPresent
+
+# --- Service ---
+service:
+  port: 5432
+
+# --- Resources ---
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

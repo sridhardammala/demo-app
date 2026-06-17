@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: demo-app
+spec:
+  accessModes:
+    # ReadWriteOnce = only one pod can mount this at a time.
+    # Correct for PostgreSQL — like an EBS volume attached to one EC2 instance.
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.storage.size }}
+  # GKE automatically provisions a GCP persistent disk for this claim
+  storageClassName: {{ .Values.storage.storageClassName }}
