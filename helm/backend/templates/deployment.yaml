@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # Release name comes from helm install — keeps names unique per environment
+  name: {{ .Release.Name }}-backend
+  labels:
+    app: {{ .Release.Name }}-backend
+spec:
+  # If autoscaling is disabled, use the replicaCount from values.yaml.
+  # If autoscaling is enabled, HPA manages this number — we don't hardcode it.
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+
+  # The selector tells the Deployment which pods belong to it.
+  # Pods must have this label to be managed by this Deployment.
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-backend
+
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-backend
+    spec:
+      containers:
+        - name: backend
+          # Combines repository + tag from values.yaml
+          # e.g. europe-west2-docker.pkg.dev/mt-2dportal/demo-app/backend:v1.0.0
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          ports:
+            - containerPort: {{ .Values.service.port }}
+
+          # Inject environment variables from values.yaml
+          # APP_VERSION tells the app what version it is at runtime
+          env:
+            - name: APP_VERSION
+              value: {{ .Values.env.APP_VERSION | quote }}
+
+          # Liveness probe — if this fails, Kubernetes restarts the pod.
+          # Like a Route 53 health check that triggers failover.
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+          # Readiness probe — if this fails, Kubernetes stops sending
+          # traffic to this pod but does NOT restart it.
+          # Useful during startup — pod is alive but not ready yet.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+          # Resource requests and limits from values.yaml
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.resources.limits.cpu }}
+              memory: {{ .Values.resources.limits.memory }}
