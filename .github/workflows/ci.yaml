@@ -1,0 +1,161 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      # Only trigger when application code changes
+      # Not when values.yaml changes — that would cause infinite loop
+      - 'backend/**'
+      - 'frontend/**'
+
+# Required for Workload Identity Federation
+# Allows the job to request a GitHub OIDC token
+permissions:
+  contents: write        # needed to commit values.yaml back to git
+  id-token: write        # needed for Workload Identity Federation
+
+env:
+  # GCP settings — read from GitHub Secrets
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION: europe-west2
+  ARTIFACT_REGISTRY: europe-west2-docker.pkg.dev
+  REPOSITORY: demo-app
+
+jobs:
+  # ─────────────────────────────────────────
+  # JOB 1 — Build and push backend image
+  # Triggered only when backend/ files change
+  # ─────────────────────────────────────────
+  build-backend:
+    name: Build and push backend
+    runs-on: ubuntu-latest
+
+    # Only run this job if backend files changed
+    if: |
+      contains(toJSON(github.event.commits.*.modified), 'backend/') ||
+      contains(toJSON(github.event.commits.*.added), 'backend/')
+
+    steps:
+      # Step 1 — Checkout the code
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # fetch-depth 0 needed to push commits back to git later
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 2 — Authenticate to GCP using Workload Identity Federation
+      # No credentials stored — GitHub OIDC token exchanged for GCP token
+      # Think of it like assuming an IAM role in AWS using OIDC
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      # Step 3 — Configure Docker to authenticate to Artifact Registry
+      # Same as running: gcloud auth configure-docker locally
+      - name: Configure Docker for Artifact Registry
+        uses: docker/setup-buildx-action@v3
+
+      - name: Authenticate Docker to Artifact Registry
+        run: gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }} --quiet
+
+      # Step 4 — Generate image tag from git commit SHA
+      # Using short SHA means every commit = unique image tag
+      # Fully traceable — image tag → git commit → exact code change
+      - name: Set image tag
+        run: echo "IMAGE_TAG=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      # Step 5 — Build the Docker image
+      - name: Build backend image
+        run: |
+          docker build \
+            -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/backend:${{ env.IMAGE_TAG }} \
+            ./backend
+
+      # Step 6 — Push to Artifact Registry
+      - name: Push backend image
+        run: |
+          docker push \
+            ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/backend:${{ env.IMAGE_TAG }}
+
+      # Step 7 — Update values.yaml with new image tag
+      # This is the handoff point between CI and CD
+      # Argo CD watches this file — updating it triggers the deployment
+      - name: Update backend values.yaml
+        run: |
+          sed -i "s/tag: .*/tag: \"${{ env.IMAGE_TAG }}\"/" helm/backend/values.yaml
+          sed -i "s/APP_VERSION: .*/APP_VERSION: \"${{ env.IMAGE_TAG }}\"/" helm/backend/values.yaml
+          sed -i "s/appVersion: .*/appVersion: \"${{ env.IMAGE_TAG }}\"/" helm/backend/Chart.yaml
+
+      # Step 8 — Commit and push updated values.yaml back to git
+      # [skip ci] prevents this commit from triggering the pipeline again
+      # Without [skip ci] → infinite loop: commit → pipeline → commit → pipeline
+      - name: Commit updated values.yaml
+        run: |
+          git config user.email "ci@github.com"
+          git config user.name "GitHub Actions"
+          git add helm/backend/values.yaml helm/backend/Chart.yaml
+          git diff --staged --quiet || git commit -m "chore: bump backend image to ${{ env.IMAGE_TAG }} [skip ci]"
+          git push
+
+  # ─────────────────────────────────────────
+  # JOB 2 — Build and push frontend image
+  # Triggered only when frontend/ files change
+  # ─────────────────────────────────────────
+  build-frontend:
+    name: Build and push frontend
+    runs-on: ubuntu-latest
+
+    if: |
+      contains(toJSON(github.event.commits.*.modified), 'frontend/') ||
+      contains(toJSON(github.event.commits.*.added), 'frontend/')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker for Artifact Registry
+        uses: docker/setup-buildx-action@v3
+
+      - name: Authenticate Docker to Artifact Registry
+        run: gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }} --quiet
+
+      - name: Set image tag
+        run: echo "IMAGE_TAG=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Build frontend image
+        run: |
+          docker build \
+            -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:${{ env.IMAGE_TAG }} \
+            ./frontend
+
+      - name: Push frontend image
+        run: |
+          docker push \
+            ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:${{ env.IMAGE_TAG }}
+
+      - name: Update frontend values.yaml
+        run: |
+          sed -i "s/tag: .*/tag: \"${{ env.IMAGE_TAG }}\"/" helm/frontend/values.yaml
+          sed -i "s/appVersion: .*/appVersion: \"${{ env.IMAGE_TAG }}\"/" helm/frontend/Chart.yaml
+
+      - name: Commit updated values.yaml
+        run: |
+          git config user.email "ci@github.com"
+          git config user.name "GitHub Actions"
+          git add helm/frontend/values.yaml helm/frontend/Chart.yaml
+          git diff --staged --quiet || git commit -m "chore: bump frontend image to ${{ env.IMAGE_TAG }} [skip ci]"
+          git push
