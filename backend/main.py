@@ -1,33 +1,40 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import os
+import psycopg2
+import psycopg2.extras
+from datetime import datetime
 
-app = FastAPI(title="Demo API", version="1.0.1")
+app = FastAPI(title="Demo API", version="1.0.3")
 
 
 # --- Health endpoint ---
-# Kubernetes liveness and readiness probes call this.
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 
 # --- Items endpoint ---
-# In-memory data for now — wired to PostgreSQL in Stage 4.
-ITEMS = [
-    {"id": 1, "name": "widget",    "price": 9.99},
-    {"id": 2, "name": "gadget",    "price": 24.99},
-    {"id": 3, "name": "doohickey", "price": 4.99},
-]
-
 @app.get("/items")
 def get_items():
-    return {"items": ITEMS}
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute("SELECT id, name, price FROM items ORDER BY id;")
+        rows = cursor.fetchall()
+        return {"items": [dict(row) for row in rows]}
+    finally:
+        conn.close()
 
 
-# --- Version endpoint --- NEW in v1.0.1
-# Shows which version is running — useful to verify a deployment worked.
-# In production you'd use this to confirm the new image is live
-# without having to check pod logs or kubectl describe.
+# --- Database connection helper ---
+def get_db_connection():
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        raise HTTPException(status_code=500, detail="DATABASE_URL not set")
+    return psycopg2.connect(database_url)
+
+
+# --- Version endpoint ---
 @app.get("/version")
 def version():
     return {
@@ -38,10 +45,12 @@ def version():
 
 
 # --- Root endpoint ---
+# Added server_time — small change to trigger CI pipeline
 @app.get("/")
 def root():
     return {
-        "service": "backend-api",
-        "version": os.getenv("APP_VERSION", "dev"),
-        "docs":    "/docs"
+        "service":     "backend-api",
+        "version":     os.getenv("APP_VERSION", "dev"),
+        "docs":        "/docs",
+        "server_time": datetime.utcnow().isoformat()
     }
