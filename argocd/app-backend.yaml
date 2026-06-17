@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: backend
+  # Argo CD Applications always live in the argocd namespace
+  namespace: argocd
+spec:
+  # Which cluster to deploy to.
+  # "in-cluster" means the same cluster Argo CD is running in.
+  # You can add external clusters too — like a staging or prod cluster.
+  project: default
+
+  # --- Source ---
+  # Where to find the Helm chart — your GitHub repo
+  source:
+    # Replace with your actual GitHub repo URL
+    repoURL: https://github.com/sridhardammala/demo-app.git
+    # Which branch to watch
+    targetRevision: main
+    # Path to the Helm chart inside the repo
+    path: helm/backend
+    helm:
+      # Override values — same as --set in helm upgrade
+      # This is how Argo CD knows which image tag to deploy
+      valueFiles:
+        - values.yaml
+
+  # --- Destination ---
+  # Which cluster and namespace to deploy into
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo-app
+
+  # --- Sync Policy ---
+  syncPolicy:
+    automated:
+      # Automatically deploy when git changes
+      # Like setting up a webhook — any push to main triggers a deploy
+      prune: true        # delete resources removed from git
+      selfHeal: true     # if someone manually changes the cluster, revert it
+    syncOptions:
+      - CreateNamespace=true
