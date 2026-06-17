@@ -53,4 +53,4 @@ def root():
         "version":     os.getenv("APP_VERSION", "dev"),
         "docs":        "/docs",
         "server_time": datetime.utcnow().isoformat()
-    }
+    }# updated
