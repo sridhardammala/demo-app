@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Demo App — GKE Platform</title>
+  <style>
+    /* Minimal styling — this is a platform demo, not a UI project */
+    body {
+      font-family: sans-serif;
+      max-width: 600px;
+      margin: 60px auto;
+      padding: 0 20px;
+    }
+    h1   { font-size: 1.4rem; }
+    pre  { background: #f4f4f4; padding: 16px; border-radius: 8px; }
+    button {
+      padding: 8px 20px;
+      cursor: pointer;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Demo App — GKE Platform</h1>
+  <p>Frontend served by nginx. API served by FastAPI.</p>
+
+  <button onclick="loadItems()">Load items from API</button>
+  <button onclick="checkHealth()">Check API health</button>
+
+  <pre id="output">Click a button to call the backend API...</pre>
+
+  <script>
+    // Calls /api/items — nginx proxies this to backend-service:5000/items
+    // The browser thinks it's calling the same server (same origin).
+    // nginx silently forwards it to the backend pod inside the cluster.
+    async function loadItems() {
+      const res  = await fetch('/api/items');
+      const data = await res.json();
+      document.getElementById('output').textContent =
+        JSON.stringify(data, null, 2);
+    }
+
+    // Calls /api/health — useful to verify the backend pod is alive
+    async function checkHealth() {
+      const res  = await fetch('/api/health');
+      const data = await res.json();
+      document.getElementById('output').textContent =
+        JSON.stringify(data, null, 2);
+    }
+  </script>
+</body>
+</html>
