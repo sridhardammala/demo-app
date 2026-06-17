@@ -1,26 +1,18 @@
 from fastapi import FastAPI
 import os
 
-# FastAPI is like Flask but better for APIs.
-# It auto-generates a Swagger UI at /docs — no extra work needed.
-# You can open /docs in a browser and test every endpoint interactively.
-app = FastAPI(title="Demo API", version="1.0.0")
+app = FastAPI(title="Demo API", version="1.0.1")
 
 
 # --- Health endpoint ---
-# Kubernetes calls this to check if the pod is alive and ready.
-# If this returns 200 = pod is healthy, send it traffic.
-# If this fails = Kubernetes restarts the pod automatically.
-# Equivalent to a Target Group health check on an AWS ALB.
+# Kubernetes liveness and readiness probes call this.
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 
 # --- Items endpoint ---
-# Returns a hardcoded list for now.
-# In Stage 4 we replace this with a real PostgreSQL query.
-# Think of this as a mock DynamoDB scan for now.
+# In-memory data for now — wired to PostgreSQL in Stage 4.
 ITEMS = [
     {"id": 1, "name": "widget",    "price": 9.99},
     {"id": 2, "name": "gadget",    "price": 24.99},
@@ -32,10 +24,20 @@ def get_items():
     return {"items": ITEMS}
 
 
+# --- Version endpoint --- NEW in v1.0.1
+# Shows which version is running — useful to verify a deployment worked.
+# In production you'd use this to confirm the new image is live
+# without having to check pod logs or kubectl describe.
+@app.get("/version")
+def version():
+    return {
+        "version":     os.getenv("APP_VERSION", "dev"),
+        "environment": os.getenv("ENVIRONMENT", "dev"),
+        "service":     "backend-api"
+    }
+
+
 # --- Root endpoint ---
-# Returns basic service info — useful for debugging.
-# APP_VERSION is injected by Helm at deploy time via an environment variable.
-# Think of it like an SSM Parameter Store value being injected into a Lambda.
 @app.get("/")
 def root():
     return {
