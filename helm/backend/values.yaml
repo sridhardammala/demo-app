@@ -1,14 +1,14 @@
 # --- Replica count ---
 # How many pods to run. Kubernetes spreads them across nodes.
 # Think of this like desired count in an ECS service.
-replicaCount: 1
+replicaCount: 2
 
 # --- Image config ---
 image:
   # Full Artifact Registry path to the image
   repository: europe-west2-docker.pkg.dev/mt-2dportal/demo-app/backend
   # Image tag — we update this on every deployment
-  tag: "v1.0.1"
+  tag: "v1.0.2"
   # IfNotPresent = only pull if the image isn't already on the node.
   # Always = pull every time (useful in dev, wasteful in prod).
   pullPolicy: IfNotPresent
@@ -45,4 +45,4 @@ autoscaling:
 # These become environment variables inside the container.
 # Think of it like Lambda environment variables.
 env:
-  APP_VERSION: "v1.0.1"
+  APP_VERSION: "v1.0.2"
