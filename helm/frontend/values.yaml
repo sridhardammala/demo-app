@@ -1,0 +1,37 @@
+# --- Replica count ---
+# One pod is fine for the frontend — it's stateless so scaling is easy later
+replicaCount: 1
+
+# --- Image config ---
+image:
+  repository: europe-west2-docker.pkg.dev/mt-2dportal/demo-app/frontend
+  tag: "v1.0.0"
+  pullPolicy: IfNotPresent
+
+# --- Service config ---
+service:
+  # ClusterIP = internal only.
+  # The Ingress sits in front and routes external traffic to this service.
+  # Think of it like an internal Target Group behind an ALB.
+  type: ClusterIP
+  port: 80
+
+# --- Ingress config ---
+# Ingress = the public entry point into the cluster.
+# Think of it like an AWS ALB with listener rules.
+ingress:
+  enabled: true
+  # GKE has a built-in ingress controller.
+  # This annotation tells GKE to use its native HTTP load balancer.
+  className: ""
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+
+# --- Resource limits ---
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi

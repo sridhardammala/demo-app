@@ -1,0 +1,13 @@
+apiVersion: v2
+
+# Chart name
+name: frontend
+
+# What this chart deploys
+description: nginx frontend service for the demo app
+
+# Chart version — bump when you change the chart
+version: 0.1.0
+
+# App version — matches the Docker image tag
+appVersion: "1.0.0"

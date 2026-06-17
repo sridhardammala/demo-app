@@ -1,0 +1,24 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-ingress
+  annotations:
+    # Tells GKE to use its native HTTP load balancer (Google Cloud LB).
+    # GKE provisions a real GCP load balancer automatically.
+    # Equivalent to creating an ALB in AWS and pointing it at a Target Group.
+    kubernetes.io/ingress.class: "gce"
+spec:
+  rules:
+    - http:
+        paths:
+          # Route all traffic to the frontend service.
+          # nginx then handles internal routing — /api/* goes to backend.
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-service
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}
